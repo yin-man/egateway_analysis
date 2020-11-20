@@ -21,7 +21,7 @@ LIBPATH = dirname(dirname(PWD)) + sep + "lib"
 # print(LIBPATH)
 sys.path.append(LIBPATH)
 
-import lib
+
 from utils import Utils
 from file_log_manager import FileLogManager
 from src.conf import root,params_conf,unit
