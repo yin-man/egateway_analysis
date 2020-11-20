@@ -252,7 +252,6 @@ if __name__ == '__main__':
             help="log level: true or false")
     args = parser.parse_args()
 
-
     ana = Analysis(args.env, args.debug)
 
     """
