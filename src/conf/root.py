@@ -32,7 +32,7 @@ pid = {
     5: {'cn': '病人姓名', 'en': 'Patient Name',1:'病人姓氏',2:'病人名',3:'病人其它名字',7:'名字类型码'},#⭐#
     6: {'cn': '母亲婚前姓名', 'en': 'Mother’s Maiden Name'},
     7: {'cn': '出生日期', 'en': 'Date/Time of Birth'},#⭐#
-    8: {'cn': '性别管理', 'en': 'Administrative Sex','M':'男性','F':'女性','U':'未知'},#⭐#
+    8: {'cn': '性别管理', 'en': 'Administrative Sex','enum':{'M':'男性','F':'女性','U':'未知'}},#⭐#
     19: {'cn': 'SSN号码', 'en': 'SSN Number - Patient'},
 }
 '''
@@ -78,23 +78,23 @@ sft = {
 
 obx = {
     1: {'cn': '集合标识 ', 'en': "Set ID - OBX"},
-    2: {'cn': '数值类型', 'en': "Value Type",'NM':'整数小数','SN':'比率','CNE':'枚举值','ST':'字符串'},
+    2: {'cn': '数值类型', 'en': "Value Type",'enum':{'NM':'整数小数','SN':'比率','CNE':'枚举值','ST':'字符串'}},
     3: {'cn': '监测参数标识', 'en': "Observation Identifier"},
     4: {'cn': '监测参数', 'en': "Sub-ID Observation Sub-ID"},
     5: {'cn': '监测参数值', 'en': "Observation Value"},
     6: {'cn': '单位', 'en': "Units"},
     7: {'cn': '参考范围', 'en': "Reference Range"},
-    8: {'cn': '异常标志', 'en': "Abnormality Flags"},
-    9: {'cn': '', 'en': "Probability"},
-    10: {'cn': '', 'en': "Nature of Abnormal Test"},
-    11: {'cn': '监测结果状态', 'en': "Observation Result Status"},
-    12: {'cn': '', 'en': "Effective Date of Reference Range"},
-    13: {'cn': '', 'en': "User Defined Access Check"},
+    8: {'cn': '异常标志', 'en': "Abnormality Flags",'enum':{'DEMO':'演示数据','INV':'无效'}},
+    9: {'cn': '概率', 'en': "Probability"},
+    10: {'cn': '异常测验实质', 'en': "Nature of Abnormal Test"},
+    11: {'cn': '监测结果状态', 'en': "Observation Result Status",'enum':{'F':'有效, 用户已确认','R':'有效, 用户未确认','X':'无效'}},
+    12: {'cn': '有效日期', 'en': "Effective Date of Reference Range"},
+    13: {'cn': '用户定义检查', 'en': "User Defined Access Check"},
     14: {'cn': '监测日期时间', 'en': "Date/Time of Observation"},
-    15: {'cn': '', 'en': "Producer's ID"},
+    15: {'cn': '生产者ID', 'en': "Producer's ID"},
     16: {'cn': '责任监测者', 'en': "Responsible Observer"},
     17: {'cn': '监测方法', 'en': "Observation Method"},
     18: {'cn': '设备标识实例', 'en': "Equipment Instance Identifier"},
-    19: {'cn': '', 'en': "Date/Time of Analysis"},
+    19: {'cn': '分析日期时间', 'en': "Date/Time of Analysis"},
     20: {'cn': '监测场所', 'en': "Observation Site"},
 }

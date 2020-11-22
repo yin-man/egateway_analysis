@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-#_*_coding:utf-8_*_
+# _*_coding:utf-8_*_
 
 
 import os
@@ -10,8 +10,6 @@ import hl7parser
 
 from os.path import dirname, abspath, sep
 
-from src.conf.root import msh
-
 PWD = dirname(abspath(__file__))
 CONFPATH = dirname(PWD) + sep + "conf"
 LOGDIR = dirname(dirname(PWD)) + sep + "log"
@@ -21,31 +19,48 @@ LIBPATH = dirname(dirname(PWD)) + sep + "lib"
 # print(LIBPATH)
 sys.path.append(LIBPATH)
 
-
 from utils import Utils
 from file_log_manager import FileLogManager
-from src.conf import root,params_conf,unit
+from src.conf import root, params, units
 
 file_path = "egateway_analysis.src.analysis.hl7_handler.%s_analysis"
 
-
 from openpyxl import Workbook
-def write_excel(data):
-    wb=Workbook()
-    for key,val in data.items():
-        ws=wb.create_sheet(key,0)
-        if isinstance(val,dict):
-            ws.append(list(val.keys()))
-            ws.append(list(val.values()))
-        if isinstance(val,list):
-            for i in val:
-                ws.append(list(i.keys()))
-                ws.append(list(i.values()))
-    wb.save('result.xlsx')
 
+
+def write_excel(data_list):
+    """
+    Args:
+        data_list: [
+                    {'title':str,
+                    'th':list,
+                    'tr':[[],[]...]
+                    },...
+                    ]
+    Returns:
+    """
+    wb = Workbook()
+    for sheet in data_list:
+        ws = wb.create_sheet(sheet['title'])
+        ws.append(sheet['th'])
+        for tr in sheet['tr']:
+            ws.append(tr)
+        dims = {}
+        for row in ws.rows:
+            for cell in row:
+                if cell.value:
+                    len_cell = max([(len(line.encode('utf-8')) - len(line)) / 2 + len(line) for line in
+                                    str(cell.value).split('\n')])
+                    dims[cell.column_letter] = max(dims.get(cell.column_letter, 0), len_cell)
+        for col, value in dims.items():
+            ws.column_dimensions[col].width = value + 2 if value + 2 <= 50 else 50
+    del wb['Sheet']
+    wb.save('out.xlsx')
+
+def write_html(data_list):
+    pass
 
 class Analysis:
-
     _handler_obj = {}
 
     def __init__(self, env, debug):
@@ -69,8 +84,70 @@ class Analysis:
             return False
         return True
 
+    def parser(self, process_dict):
+        """
+        Args:
+            line: segment 列表
+            line_type: segment名字
+        Returns:
+        """
+        result_list = []
+        for line_head, line_list in process_dict.items():
+            flag_set = set()
+            if line_head == 'msh':
+                line_list[0].insert(0, '|')
+            segment = getattr(root, line_head)
+            unit_dict = getattr(units, 'data')
+            params_dict = getattr(params, 'data')
+            th = [i.get('cn') for i in segment.values()]
+            for row in line_list:
+                for i in range(len(row)):
+                    if segment.get(i + 1):
+                        if row[i]:
+                            flag_set.add(i)
+                        row[i] = row[i].replace('^', ' ').strip()  # 去^
+                        enum_dict = segment.get(i + 1).get('enum')
+                        if enum_dict:
+                            enum_value = enum_dict.get(row[i])
+                            row[i] = enum_value  # enum替换
+                        if line_head == 'obx':
+                            try:
+                                param = params_dict.get(row[3])[0]
+                                if param:
+                                    row[3] = param
+                                uint = unit_dict.get(row[5])[0]
+                                if uint:
+                                    row[5] = uint
+                            except:
+                                pass
+            result_list.append({'title': line_head, 'th': th, 'tr': line_list, 'flag_set': flag_set})
+        result = []
+
+        for seg in result_list:
+            title = seg['title']
+            th = seg['th']
+            tr = seg['tr']
+            flag_list = list(seg['flag_set'])
+            flag_list.sort()
+            print(th)
+            print(flag_list)
+            thead = [th[i] for i in flag_list]
+            trows = []
+            for line in tr:
+                n = max(flag_list) - len(line) + 1
+                if n > 0:
+                    for i in range(n):
+                        line.append('')
+                trow = []
+                for i in flag_list:
+                    trow.append(line[i])
+                trows.append(trow)
+            print(trows)
+            result.append({'title': title, 'th': thead, 'tr': trows})
+        write_excel(result)
+
     def process(self, msg):
-        data="""MSH|^~\&|MINDRAY_N-SERIES^00A037009B000000^EUI-64||||20200825020835000-0800||ORU^R01^ORU_R01|1|P|2.6|||AL|NE||UNICODE UTF-8|||IHE_PCD_001^IHE PCD^1.3.6.1.4.1.19376.1.6.1.1.1^ISO
+        data1 = """MSH|^~\&|MINDRAY_N-SERIES^00A037009B000000^EUI-64||||20200825020835000-0800||ORU^R01^ORU_R01|1|P|2.6|||AL|NE||UNICODE UTF-8|||IHE_PCD_001^IHE PCD^1.3.6.1.4.1.19376.1.6.1.1.1^ISO
 PID|||^^^Hospital^PI||John^Smith-Demo^^^^^L|||M||Unknown
 PV1||I|ccu^^12^大连
 OBR|1|1^MINDRAY_N-SERIES^00A037009B000000^EUI-64|1^MINDRAY_N-SERIES^00A037009B000000^EUI-64|182777000^monitoring of patient^SCT|||20200825020835-0800
@@ -206,50 +283,34 @@ OBX|129|NM|152000^MDC_VENT_VOL_MINUTE_EXP^MDC|1.13.1.152000|15.0|265216^MDC_DIM_
 OBX|130|NM|152004^MDC_VENT_VOL_MINUTE_INSP^MDC|1.13.1.152004|15.0|265216^MDC_DIM_L_PER_MIN^MDC||DEMO|||R|||20200825020835-0800
 OBX|131|NM|178^MNDRY_BREATH_RATE_TOTAL^99MNDRY|1.13.1.178|30|264864^MDC_DIM_BEAT_PER_MIN^MDC||DEMO|||R|||20200825020835-0800
 OBX|132|NM|180^MNDRY_BREATH_RATE_SPONT^99MNDRY|1.13.1.180|30|264864^MDC_DIM_BEAT_PER_MIN^MDC||DEMO|||R|||20200825020835-0800"""
-        ret = {}
-        obxs=[]
-        msg=hl7parser.hl7.HL7Message(data)
-        # print(msg.segments)
+        data2="""MSH|^~\&|MINDRAY_EGATEWAY^00A0370027E84537^EUI-64|MINDRAY|||20190521151655.0000+0800||ORU^R01^ORU_R01|47|P|2.6|||AL|NE||UNICODE UTF8|||IHE_PCD_001^IHE PCD^1.3.6.1.4.1.19376.1.6.1.1.1^ISO
+PID|||PatientID^^^Hospital^PI||LastName^FirstName^MiddleName^^^^L||20190521|M||2131-1|||||||||||||||||||||||||Custom1Value^Custom1Name|Custom2Value^Custom2Name
+PV1||I|Department^Room^Bed^Facility||||^AttentdingDoctor|^ReferringDoctor|||||||||||VisitNumber|||||||||||||||||||||||||||||||Custom3V alue^Custom3Name||Custom4Value^Custom4Name
+OBR|1|47^MINDRAY_EGATEWAY^00A0370027E84537^EUI-64|47^MINDRAY_EGATEWAY^00A0370027E84537^EUI-64|182777000^monitoring of patient^SCT|||20190521151652.0000+0800
+OBX|1||69965^MDC_DEV_MON_PHYSIO_MULTI_PARAM_MDS^MDC|1.0.0.0|||||||X|||||||661000049B000205^BIG_DIPPER^661000049B000205^EUI-64 OBX|2||69902^MDC_DEV_METER_TEMP_VMD^MDC|1.2.0.0|||||||X OBX|3||69903^MDC_DEV_METER_TEMP_CHAN^MDC|1.2.1.0|||||||X OBX|4|NM|150344^MDC_TEMP^MDC|1.2.1.150344|98.6|266560^MDC_DIM_FAHR^MDC|||||R|||20190521151652.0000+0800 OBX|5||69903^MDC_DEV_METER_TEMP_CHAN^MDC|1.2.2.0|||||||X OBX|6|NM|150344^MDC_TEMP^MDC|1.2.2.150344|99.0|266560^MDC_DIM_FAHR^MDC|||||R|||20190521151652.0000+0800 OBX|7||70715^MDC_DEV_TEMP_DIFF_CHAN^MDC|1.2.4.0|||||||X OBX|8|NM|188440^MDC_TEMP_DIFF^MDC|1.2.4.188440|0.4|266560^MDC_DIM_FAHR^MDC|||||R|||20190521151652.0000+0800 OBX|9||69642^MDC_DEV_ANALY_SAT_O2_VMD^MDC|1.3.0.0|||||||X OBX|10||69643^MDC_DEV_ANALY_SAT_O2_CHAN^MDC|1.3.1.0|||||||X OBX|11|NM|150456^MDC_PULS_OXIM_SAT_O2^MDC|1.3.1.150456|98|262688^MDC_DIM_PERCENT^MDC|||||R|||20190521151652.0000+0800 OBX|12|NM|149530^MDC_PULS_OXIM_PULS_RATE^MDC|1.3.1.149530|60|264864^MDC_DIM_BEAT_PER_MIN^MDC|||||R|||20190521151652.0000+0800 OBX|13|NM|150488^MDC_BLD_PERF_INDEX^MDC|1.3.1.150488|12.00|262688^MDC_DIM_PERCENT^MDC|||||R|||20190521151652.0000+0800 OBX|14||69798^MDC_DEV_ECG_VMD^MDC|1.7.0.0|||||||X OBX|15||70667^MDC_DEV_ECG_RESP_CHAN^MDC|1.7.1.0|||||||X OBX|16|NM|151578^MDC_TTHOR_RESP_RATE^MDC|1.7.1.151578|20|264928^MDC_DIM_RESP_PER_MIN^MDC|||||R|||20190521151652.0000+0800 OBX|17||70671^MDC_DEV_ARRHY_CHAN^MDC|1.7.2.0|||||||X OBX|18|NM|148066^MDC_ECG_V_P_C_RATE^MDC|1.7.2.148066|0|264864^MDC_DIM_BEAT_PER_MIN^MDC|||||R|||20190521151652.0000+0800 OBX|19|NM|352^MNDRY_ECG_VPB_RATE^99MNDRY|1.7.2.352|0|264864^MDC_DIM_BEAT_PER_MIN^MDC|||||R|||20190521151652.0000+0800 OBX|20|NM|579^MNDRY_ECG_RHY_V_P_C_CPLT_RATE^99MNDRY|1.7.2.141034|0|264864^MDC_DIM_BEAT_PER_MIN^MDC|||||R|||20190521151652.0000+0800 OBX|21|NM|581^MNDRY_ECG_BEAT_V_P_C_RonT_RATE^99MNDRY|1.7.2.139450|0|264864^MDC_DIM_BEAT_PER_MIN^MDC|||||R|||20190521151652.0000+0800 OBX|22||70679^MDC_DEV_ST_CHAN^MDC|1.7.3.0|||||||X OBX|23|NM|131841^MDC_ECG_AMPL_ST_I^MDC|1.7.3.131841|0.08|266418^MDC_DIM_MILLI_VOLT^MDC|||||R|||20190521151652.0000+0800 OBX|24|NM|131842^MDC_ECG_AMPL_ST_II^MDC|1.7.3.131842|0.10|266418^MDC_DIM_MILLI_VOLT^MDC|||||R|||20190521151652.0000+0800 OBX|25|NM|131901^MDC_ECG_AMPL_ST_III^MDC|1.7.3.131901|0.02|266418^MDC_DIM_MILLI_VOLT^MDC|||||R|||20190521151652.0000+0800 OBX|26|NM|131902^MDC_ECG_AMPL_ST_AVR^MDC|1.7.3.131902|-0.09|266418^MDC_DIM_MILLI_VOLT^MDC|||||R|||20190521151652.0000+0800 OBX|27|NM|131903^MDC_ECG_AMPL_ST_AVL^MDC|1.7.3.131903|0.03|266418^MDC_DIM_MILLI_VOLT^MDC|||||R|||20190521151652.0000+0800 OBX|28|NM|131904^MDC_ECG_AMPL_ST_AVF^MDC|1.7.3.131904|0.06|266418^MDC_DIM_MILLI_VOLT^MDC|||||R|||20190521151652.0000+0800 OBX|29|NM|131927^MDC_ECG_AMPL_ST_V^MDC|1.7.3.131927|0.04|266418^MDC_DIM_MILLI_VOLT^MDC|||||R|||20190521151652.0000+0800 OBX|30||70739^MDC_DEV_CARD_RATE_CHAN^MDC|1.7.4.0|||||||X OBX|31|NM|147842^MDC_ECG_HEART_RATE^MDC|1.7.4.147842|60|264864^MDC_DIM_BEAT_PER_MIN^MDC|||||R|||20190521151652.0000+0800 OBX|32||70007^MNDRY_DEV_ECG_PACE_CHAN^99MNDRY|1.7.5.0|||||||X OBX|33|NM|300^MNDRY_ECG_PACING_NON_CAPT_RATE^99MNDRY|1.7.5.300|0|264864^MDC_DIM_BEAT_PER_MIN^MDC|||||R|||20190521151652.0000+0800 OBX|34|NM|301^MNDRY_ECG_PACER_NOT_PACING_RATE^99MNDRY|1.7.5.301|0|264864^MDC_DIM_BEAT_PER_MIN^MDC|||||R|||20190521151652.0000+0800 OBX|35||69799^MDC_DEV_ECG_CHAN^MDC|1.7.6.0|||||||X OBX|36|NM|147232^MDC_ECG_TIME_PD_QT_GL^MDC|1.7.6.147232|320|264338^MDC_DIM_MILLI_SEC^MDC|||||R|||20190521151652.0000+0800 OBX|37|NM|147236^MDC_ECG_TIME_PD_QTC^MDC|1.7.6.147236|320|264338^MDC_DIM_MILLI_SEC^MDC|||||R|||20190521151652.0000+0800 OBX|38|NM|307^MNDRY_ECG_QTC_HR^99MNDRY|1.7.6.307|60|264864^MDC_DIM_BEAT_PER_MIN^MDC|||||R|||20190521151652.0000+0800 OBX|39|NM|309^MNDRY_ECG_QTC_DIFF^99MNDRY|1.7.6.309|0|264338^MDC_DIM_MILLI_SEC^MDC|||||R|||20190521151652.0000+0800 OBX|40|CNE|306^MNDRY_ECG_QTC_FORMULA_GL^99MNDRY|1.7.6.306|60050^MNDRY_ECG_QTC_FORMULA_BAZETT^99MNDRY|262656^MDC_DIM_DIMLESS^MDC|||||R| ||20190521151652.0000+0800
+OBX|41||70010^MNDRY_VMD_BODY_MEASUREMENT^99MNDRY|1.10.0.0|||||||X OBX|42||70011^MNDRY_DEV_BODY_MEASUREMENT_CHAN^99MNDRY|1.10.1.0|||||||X OBX|43|NM|188740^MDC_LEN_BODY_ACTUAL^MDC|1.10.1.188740|180.0|263441^MDC_DIM_CENTI_M^MDC|||||R|||20190521151652.0000+0800
+OBX|44|NM|188736^MDC_MASS_BODY_ACTUAL^MDC|1.10.1.188736|80.0|263875^MDC_DIM_KILO_G^MDC|||||R|||20190521151652.0000+0800"""
+        process_dict = {}
+        msg = hl7parser.hl7.HL7Message(data1)
         for i in msg.segments:
             line_type, data_obj = i
-            line=[str(x) for x in data_obj]
-            if line_type=='msh':
-                line.insert(0,'|')
-            # print(line)
-            item=getattr(root,line_type)
-            res={}
-            for i in line:
-                index = item.get(line.index(i) + 1)
-                if i and index:
-                    res[index['cn']]=i
-                    obx_4=res.get('监测参数')
-                    match=params_conf.data.get(obx_4)
-                    if obx_4 and match:
-                        res['监测参数解析']=match[0]
-                    obx_5 = res.get('单位')
-                    match = unit.data.get(obx_5)
-                    if obx_5 and match:
-                        res['单位解析'] = match[0]
-
-            if line_type=='obx':
-                obxs.append(res)
+            line = [str(x) for x in data_obj]
+            if not process_dict.get(line_type):
+                process_dict[line_type] = []
+                process_dict[line_type].append(line)
             else:
-                ret[line_type]=res
-            ret['obxs']=obxs
-        print(ret)
-        write_excel(ret)
-
+                process_dict[line_type].append(line)
+        self.parser(process_dict)
 
 
 if __name__ == '__main__':
-
     parser = argparse.ArgumentParser()
     # parser.add_argument("-t", "--type", type=str, required=True,
     #         help="collect type: http_probe / tcp_probe/ switches_data ...")
     parser.add_argument("-e", "--env", default="dev", choices=["dev", "prod"],
-            help="environment: dev or prod")
+                        help="environment: dev or prod")
     parser.add_argument("-d", "--debug", type=Utils.judge_bool, default="true",
-            help="log level: true or false")
+                        help="log level: true or false")
     args = parser.parse_args()
 
     ana = Analysis(args.env, args.debug)
